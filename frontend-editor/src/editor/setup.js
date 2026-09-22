@@ -34,9 +34,13 @@ greet('World')
 
 ### Task Lists
 
+Click a checkbox to toggle it, or use the toolbar to check/uncheck a whole group at once.
+
 - [x] Build the markdown parser
 - [x] Implement decoration plugin
 - [ ] Add more syntax support
+  - [ ] Nested task items work too
+  - [-] In-progress item (unknown marker is preserved)
 - [ ] Polish the UI
 
 ### Images

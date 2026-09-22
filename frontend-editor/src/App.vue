@@ -12,12 +12,15 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import Toolbar from '@/components/Toolbar.vue'
 import EditorPane from '@/components/EditorPane.vue'
 import StatusBar from '@/components/StatusBar.vue'
+import { useEditorStore } from '@/stores/editor'
+import { setTasksChanges } from '@/editor/task-list'
 
 const editorPane = ref(null)
+const store = useEditorStore()
 let editorView = null
 
 const toast = reactive({ visible: false, message: '', type: 'info' })
@@ -50,6 +53,40 @@ function insertLine(prefix) {
   editorView.focus()
 }
 
+/**
+ * 批量设置待办完成状态（整组勾选/取消）。
+ * 有选区时作用于选区相交的任务行，否则作用于全文；
+ * 未知标记（[-]、[?] 等）原样保留，单次 dispatch 即一个撤销单元。
+ */
+function batchSetTasks(checked) {
+  if (!editorView) return
+  const sel = editorView.state.selection.main
+  const range = sel.empty ? null : { from: sel.from, to: sel.to }
+  const changes = setTasksChanges(editorView.state, checked, range)
+  if (changes.length === 0) {
+    showToast(range ? '选区内没有可调整的待办' : '没有可调整的待办', 'info')
+    return
+  }
+  editorView.dispatch({ changes })
+  editorView.focus()
+  showToast(checked ? `已勾选 ${changes.length} 项待办` : `已取消 ${changes.length} 项待办`, 'success')
+}
+
+function save() {
+  store.markSaved()
+  showToast('已保存', 'success')
+}
+
+function onKeydown(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    save()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
 function handleToolbarAction(action) {
   const map = {
     bold: () => insertText('**', '**'),
@@ -61,6 +98,9 @@ function handleToolbarAction(action) {
     blockquote: () => insertLine('> '),
     'bullet-list': () => insertLine('- '),
     'ordered-list': () => insertLine('1. '),
+    'task-list': () => insertLine('- [ ] '),
+    'task-check-all': () => batchSetTasks(true),
+    'task-uncheck-all': () => batchSetTasks(false),
     hr: () => {
       const pos = editorView.state.selection.main.head
       const line = editorView.state.doc.lineAt(pos)

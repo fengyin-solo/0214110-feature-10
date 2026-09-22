@@ -5,6 +5,7 @@ import {
 } from '@codemirror/view'
 import { RangeSetBuilder } from '@codemirror/state'
 import { parseMarkdownRegions } from './markdown-parser'
+import { toggleTaskChanges } from './task-list'
 
 /**
  * HR Widget — renders a horizontal rule
@@ -114,23 +115,46 @@ class ImageWidget extends WidgetType {
 }
 
 /**
- * Checkbox Widget for task lists
+ * Checkbox Widget for task lists.
+ *
+ * - 已知标记（[ ] / [x]）：渲染为可点击复选框，点击即切换底层文本；
+ * - 未知标记（[-]、[?] 等）：渲染为虚线框并原样展示字符，只读，
+ *   点击与批量操作都不会改写它，保证未知完成状态不丢失。
+ *
+ * 切换通过 view.dispatch 修改真实 Markdown 文本，渲染视图由文本
+ * 重新推导，因此正文与渲染永远一致，且可撤销。
  */
 class CheckboxWidget extends WidgetType {
-  constructor(checked) {
+  constructor(marker, checkFrom) {
     super()
-    this.checked = checked
+    this.marker = marker
+    this.checkFrom = checkFrom
+    this.checked = marker === 'x' || marker === 'X'
+    this.known = this.checked || marker === ' '
   }
-  toDOM() {
+
+  toDOM(view) {
     const span = document.createElement('span')
-    span.className = `md-task-checkbox${this.checked ? ' md-task-checkbox--checked' : ''}`
-    if (!this.checked) {
-      span.innerHTML = '&nbsp;'
+    if (this.known) {
+      span.className = `md-task-checkbox${this.checked ? ' md-task-checkbox--checked' : ''}`
+      if (!this.checked) span.innerHTML = '&nbsp;'
+      span.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        // 基于当前 state 重新校验后再派发，连续点击不会串改
+        const changes = toggleTaskChanges(view.state, this.checkFrom)
+        if (changes) view.dispatch({ changes })
+      })
+    } else {
+      span.className = 'md-task-checkbox md-task-checkbox--unknown'
+      span.textContent = this.marker
+      span.title = `未知标记 [${this.marker}]，已原样保留，不参与勾选`
     }
     return span
   }
-  ignoreEvent() { return false }
-  eq(other) { return other.checked === this.checked }
+
+  ignoreEvent() { return true }
+  eq(other) { return other.marker === this.marker && other.checkFrom === this.checkFrom }
 }
 
 // Decoration marks
@@ -146,6 +170,7 @@ const syntaxVisibleDeco = Decoration.mark({ class: 'md-syntax-visible' })
 const codeBlockDeco = Decoration.line({ class: 'md-code-block' })
 const listMarkerDeco = Decoration.mark({ class: 'md-list-marker' })
 const headingMarkDeco = Decoration.mark({ class: 'md-heading-mark' })
+const taskDoneDeco = Decoration.mark({ class: 'md-task-text--done' })
 
 /**
  * Get the line range that the cursor is on.
@@ -320,15 +345,20 @@ function buildDecorations(view) {
       }
 
       case 'task-list': {
+        const { checkFrom, checkTo, checked, marker } = region.meta
         if (!cursorOn) {
-          const { checkFrom, checkTo, checked } = region.meta
+          // 替换 `[x] ` 为复选框；空任务（行尾即 `]`）时不能越界吞掉换行
           decos.push({
             from: checkFrom,
-            to: checkTo + 1,
+            to: Math.min(checkTo + 1, region.to),
             deco: Decoration.replace({
-              widget: new CheckboxWidget(checked)
+              widget: new CheckboxWidget(marker, checkFrom)
             })
           })
+        }
+        // 已完成任务的文本划线置灰（光标在行间时同样生效，保持正文一致）
+        if (checked && region.contentFrom < region.contentTo) {
+          decos.push({ from: region.contentFrom, to: region.contentTo, deco: taskDoneDeco })
         }
         break
       }

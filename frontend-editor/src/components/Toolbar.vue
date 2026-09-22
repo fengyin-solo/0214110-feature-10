@@ -53,6 +53,11 @@ const actionGroups = [
     { id: 'ordered-list', title: '有序列表', icon: I('<line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/>') },
     { id: 'hr', title: '分割线', icon: I('<line x1="2" y1="12" x2="22" y2="12"/>') },
   ],
+  [
+    { id: 'task-list', title: '插入任务项', icon: I('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') },
+    { id: 'task-check-all', title: '勾选全部待办（选区内优先）', icon: I('<polyline points="2 12 7 17 17 5"/><polyline points="11 15 13 17 22 7"/>') },
+    { id: 'task-uncheck-all', title: '取消全部待办（选区内优先）', icon: I('<rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/>') },
+  ],
 ]
 </script>
 

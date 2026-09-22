@@ -144,18 +144,26 @@ export function parseMarkdownRegions(doc) {
       })
     }
 
-    // Task list
-    const taskMatch = line.match(/^(\s*[-*+]\s)\[([xX ])\]\s(.+)$/)
+    // Task list — supports `- [ ]`, `1. [ ]`, nested indents, empty items,
+    // and arbitrary single-char markers (unknown markers are preserved as-is)
+    const taskMatch = line.match(/^(\s*(?:[-*+]|\d+[.)])\s)\[([^\]])\](?:\s+(.*))?$/)
     if (taskMatch) {
+      const marker = taskMatch[2]
+      const text = taskMatch[3]
       const checkStart = lineStart + taskMatch[1].length
+      const checked = marker === 'x' || marker === 'X'
       regions.push({
         type: 'task-list',
         from: lineStart,
         to: lineEnd,
-        contentFrom: checkStart + 4,
+        contentFrom: text ? lineEnd - text.length : lineEnd,
         contentTo: lineEnd,
         meta: {
-          checked: taskMatch[2].toLowerCase() === 'x',
+          marker,
+          checked,
+          // known markers: ' ', 'x', 'X' — anything else is unknown and
+          // must never be rewritten by toggle/batch operations
+          known: checked || marker === ' ',
           checkFrom: checkStart,
           checkTo: checkStart + 3
         }

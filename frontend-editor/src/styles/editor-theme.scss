@@ -197,7 +197,14 @@
   border-radius: 3px;
   margin-right: $sp-1;
   vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
   transition: all $t-fast $ease;
+
+  &:hover {
+    border-color: $accent;
+    box-shadow: 0 0 0 2px $accent-soft;
+  }
 
   &--checked {
     background: $accent;
@@ -205,6 +212,29 @@
     color: #fff;
     &::after { content: '✓'; font-size: 10px; }
   }
+
+  // 未知标记（[-]、[?] 等）：虚线框 + 原样字符，只读不切换
+  &--unknown {
+    border-style: dashed;
+    border-color: $text-3;
+    color: $text-3;
+    font-family: $font-mono;
+    font-size: 9px;
+    line-height: 1;
+    cursor: default;
+
+    &:hover {
+      border-color: $text-3;
+      box-shadow: none;
+    }
+  }
+}
+
+// 已完成任务的文本：划线 + 置灰
+.md-task-text--done {
+  color: $text-3;
+  text-decoration: line-through;
+  text-decoration-color: rgba(0, 0, 0, 0.25);
 }
 
 // === Table ===

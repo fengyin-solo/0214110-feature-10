@@ -1,6 +1,12 @@
 <template>
   <footer class="status">
     <span class="status__item">{{ store.statusText }}</span>
+    <template v-if="store.taskTotal > 0">
+      <span class="status__sep">·</span>
+      <span class="status__item status__tasks" :class="{ 'status__tasks--done': store.taskDone === store.taskTotal }">
+        ✓ {{ store.taskDone }}/{{ store.taskTotal }}
+      </span>
+    </template>
     <span class="status__sep">·</span>
     <span class="status__item">Markdown</span>
     <span class="status__sep">·</span>
@@ -33,6 +39,14 @@ const store = useEditorStore()
   &__sep {
     font-size: $fs-xs;
     color: $border;
+  }
+
+  &__tasks {
+    color: $text-2;
+
+    &--done {
+      color: $success;
+    }
   }
 }
 </style>
