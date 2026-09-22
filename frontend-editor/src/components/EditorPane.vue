@@ -5,7 +5,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { createEditor } from '@/editor'
-import { useEditorStore } from '@/stores/editor'
+import { useEditorStore, loadStoredContent } from '@/stores/editor'
 
 const editorContainer = ref(null)
 const store = useEditorStore()
@@ -14,7 +14,10 @@ const emit = defineEmits(['ready'])
 
 onMounted(() => {
   if (!editorContainer.value) return
+  // Restore the last document verbatim (including unknown task markers).
+  const stored = loadStoredContent()
   editorView = createEditor(editorContainer.value, {
+    doc: stored ?? undefined,
     onUpdate(update) {
       if (update.docChanged) store.updateContent(update.state.doc.toString())
       if (update.selectionSet || update.docChanged) {
@@ -24,7 +27,7 @@ onMounted(() => {
       }
     }
   })
-  store.updateContent(editorView.state.doc.toString())
+  store.initContent(editorView.state.doc.toString())
   emit('ready', editorView)
 })
 

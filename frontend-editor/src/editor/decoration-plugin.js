@@ -1,10 +1,12 @@
 import {
   ViewPlugin,
   Decoration,
-  WidgetType
+  WidgetType,
+  EditorView
 } from '@codemirror/view'
 import { RangeSetBuilder } from '@codemirror/state'
 import { parseMarkdownRegions } from './markdown-parser'
+import { analyzeTasks, getGroupState, planTaskChanges } from './tasks'
 
 /**
  * HR Widget — renders a horizontal rule
@@ -114,23 +116,51 @@ class ImageWidget extends WidgetType {
 }
 
 /**
- * Checkbox Widget for task lists
+ * Checkbox Widget for task lists.
+ *
+ * @param {boolean|null} checked  true/false for [x]/[ ], null = unknown marker
+ * @param {Object} pos            exact document anchors of this checkbox,
+ *                                embedded as data-* so a click handler always
+ *                                reads the box belonging to THIS widget
+ *                                instance (states can never bleed between
+ *                                rows even during rapid clicks or undo).
+ * @param {'all'|'none'|'some'|'unknown'} [group] aggregate group state
  */
 class CheckboxWidget extends WidgetType {
-  constructor(checked) {
+  constructor(checked, pos, group) {
     super()
     this.checked = checked
+    this.pos = pos
+    this.group = group
   }
   toDOM() {
     const span = document.createElement('span')
-    span.className = `md-task-checkbox${this.checked ? ' md-task-checkbox--checked' : ''}`
-    if (!this.checked) {
-      span.innerHTML = '&nbsp;'
+    let cls = 'md-task-checkbox'
+    let title
+    if (this.checked === true) {
+      cls += ' md-task-checkbox--checked'
+      title = '已完成，点击取消勾选'
+    } else if (this.checked === false) {
+      title = '待办，点击勾选'
+    } else {
+      cls += ' md-task-checkbox--unknown'
+      title = `未知完成状态 [${this.pos.marker}]，点击标记为完成（可撤销）`
     }
+    if (this.group === 'some') cls += ' md-task-checkbox--group-some'
+    span.className = cls
+    span.setAttribute('data-task-box', String(this.pos.boxFrom))
+    span.setAttribute('data-task-char', String(this.pos.boxCharOffset))
+    span.setAttribute('title', title)
+    span.setAttribute('role', 'checkbox')
+    span.setAttribute('aria-checked', this.checked === true ? 'true' : this.checked === false ? 'false' : 'mixed')
     return span
   }
   ignoreEvent() { return false }
-  eq(other) { return other.checked === this.checked }
+  eq(other) {
+    return other.checked === this.checked &&
+      other.group === this.group &&
+      other.pos.boxFrom === this.pos.boxFrom
+  }
 }
 
 // Decoration marks
@@ -162,6 +192,21 @@ function getCursorLineRanges(state) {
 }
 
 /**
+ * Lines actively being edited (collapsed carets only). Lines covered by a
+ * multi-line selection stay rendered so their checkboxes stay clickable —
+ * this is what powers select-many-then-click batch toggling.
+ */
+function getEditingLineRanges(state) {
+  const ranges = []
+  for (const sel of state.selection.ranges) {
+    if (!sel.empty) continue
+    const line = state.doc.lineAt(sel.head)
+    ranges.push({ from: line.from, to: line.to })
+  }
+  return ranges
+}
+
+/**
  * Check if a region overlaps with any cursor line range.
  */
 function isCursorOnRegion(region, cursorRanges) {
@@ -177,6 +222,8 @@ function buildDecorations(view) {
   const doc = state.doc.toString()
   const regions = parseMarkdownRegions(doc)
   const cursorRanges = getCursorLineRanges(state)
+  const editingRanges = getEditingLineRanges(state)
+  const taskModel = analyzeTasks(state.doc)
   const builder = new RangeSetBuilder()
 
   // We need to collect all decorations and sort them by from position
@@ -320,13 +367,17 @@ function buildDecorations(view) {
       }
 
       case 'task-list': {
-        if (!cursorOn) {
-          const { checkFrom, checkTo, checked } = region.meta
+        // Style the list marker even when the row is being edited
+        decos.push({ from: region.meta.markerFrom, to: region.meta.markerTo, deco: listMarkerDeco })
+        const editing = isCursorOnRegion(region, editingRanges)
+        if (!editing) {
+          const { checkFrom, checkEnd, checked, rawMarker, checkCharOffset, lineNumber } = region.meta
+          const group = getGroupState(taskModel.entries, lineNumber, taskModel.lines)
           decos.push({
             from: checkFrom,
-            to: checkTo + 1,
+            to: checkEnd,
             deco: Decoration.replace({
-              widget: new CheckboxWidget(checked)
+              widget: new CheckboxWidget(checked, { boxFrom: checkFrom, boxCharOffset: checkCharOffset, marker: rawMarker }, group)
             })
           })
         }
@@ -395,3 +446,34 @@ export const markdownDecorationPlugin = ViewPlugin.fromClass(
     decorations: (v) => v.decorations
   }
 )
+
+/**
+ * Click handling for rendered checkboxes.
+ *
+ * The widget embeds the exact document offsets of its own bracket, so every
+ * click resolves against a fresh state and its own row — rapid consecutive
+ * clicks, undo/redo and selections spanning many rows can never apply a row's
+ * state to another row. All replacements (including multi-row batches and
+ * nested groups) are one transaction, hence one undo entry.
+ */
+export const taskClickHandler = EditorView.domEventHandlers({
+  mousedown(event, view) {
+    const box = event.target instanceof Element && event.target.closest('[data-task-box]')
+    if (!box) return false
+    event.preventDefault()
+    const boxFrom = Number(box.getAttribute('data-task-box'))
+    if (Number.isNaN(boxFrom)) return true
+
+    const { changes, target } = planTaskChanges(view.state, boxFrom)
+    if (target && changes.length > 0) {
+      view.dispatch({
+        changes,
+        // Keep the caret where it was; the checkbox is not editable text.
+        selection: view.state.selection,
+        userEvent: 'input.task-toggle'
+      })
+    }
+    view.focus()
+    return true
+  }
+})

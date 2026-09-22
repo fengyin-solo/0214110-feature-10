@@ -5,7 +5,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language'
 import { editorBaseTheme } from './theme'
-import { markdownDecorationPlugin } from './decoration-plugin'
+import { markdownDecorationPlugin, taskClickHandler } from './decoration-plugin'
 
 const defaultContent = `# Welcome to MD Live Editor
 
@@ -37,7 +37,13 @@ greet('World')
 - [x] Build the markdown parser
 - [x] Implement decoration plugin
 - [ ] Add more syntax support
-- [ ] Polish the UI
+- [?] Polish the UI
+    - [x] Refine the color system
+    - [ ] Tune the motion curves
+- [ ]
+
+Tip: click a parent checkbox to toggle its whole nested group; select
+multiple task lines and click one checkbox to batch-toggle the selection.
 
 ### Images
 
@@ -91,6 +97,9 @@ export function createEditor(parent, options = {}) {
 
     // The live rendering plugin
     markdownDecorationPlugin,
+
+    // Interactive task-list checkboxes (single / group / selection batches)
+    taskClickHandler,
 
     // Placeholder
     EditorView.contentAttributes.of({ spellcheck: 'true' })

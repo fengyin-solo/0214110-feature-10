@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --no-warnings --loader ./test-loader.mjs --test src/editor/tasks.test.mjs src/editor/tasks.dom.test.mjs src/stores/stores.test.mjs"
   },
   "dependencies": {
     "vue": "^3.4.21",

@@ -196,15 +196,48 @@
   border: 1.5px solid $border;
   border-radius: 3px;
   margin-right: $sp-1;
-  vertical-align: middle;
+  vertical-align: -2px;
   transition: all $t-fast $ease;
+  cursor: pointer;
+  background: $bg-editor;
+  user-select: none;
+
+  &:hover {
+    border-color: $accent;
+    box-shadow: 0 0 0 3px $accent-soft;
+  }
+
+  &:active { transform: scale(0.9); }
 
   &--checked {
     background: $accent;
     border-color: $accent;
     color: #fff;
-    &::after { content: '✓'; font-size: 10px; }
+    &::after { content: '✓'; font-size: 10px; line-height: 1; }
   }
+
+  // Unknown completion marker — visually distinct so the raw character is
+  // never mistaken for checked/unchecked; the document text is untouched.
+  &--unknown {
+    border-color: $warning;
+    background: rgba(217, 119, 6, 0.1);
+    color: $warning;
+    &::after { content: '?'; font-size: 10px; font-weight: 700; line-height: 1; }
+  }
+
+  // Nested group in a mixed state (some descendants checked)
+  &--group-some:not(&--checked) {
+    border-color: $accent;
+    background: $accent-soft;
+    &::after {
+      content: '';
+      width: 8px;
+      height: 2px;
+      border-radius: 1px;
+      background: $accent;
+    }
+  }
+  &--checked&--group-some::after { content: '✓'; }
 }
 
 // === Table ===

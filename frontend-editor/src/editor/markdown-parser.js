@@ -113,53 +113,75 @@ export function parseMarkdownRegions(doc) {
       })
     }
 
-    // Unordered list
-    const ulMatch = line.match(/^(\s*)([-*+])\s(.+)$/)
-    if (ulMatch) {
-      const indent = ulMatch[1].length
-      const markerStart = lineStart + indent
-      regions.push({
-        type: 'list-bullet',
-        from: lineStart,
-        to: lineEnd,
-        contentFrom: markerStart + 2,
-        contentTo: lineEnd,
-        meta: { marker: ulMatch[2], markerFrom: markerStart, markerTo: markerStart + 1, indent }
-      })
-    }
-
-    // Ordered list
-    const olMatch = line.match(/^(\s*)(\d+)\.\s(.+)$/)
-    if (olMatch) {
-      const indent = olMatch[1].length
-      const markerStart = lineStart + indent
-      const markerEnd = markerStart + olMatch[2].length + 1
-      regions.push({
-        type: 'list-ordered',
-        from: lineStart,
-        to: lineEnd,
-        contentFrom: markerEnd + 1,
-        contentTo: lineEnd,
-        meta: { number: olMatch[2], markerFrom: markerStart, markerTo: markerEnd, indent }
-      })
-    }
-
-    // Task list
-    const taskMatch = line.match(/^(\s*[-*+]\s)\[([xX ])\]\s(.+)$/)
+    // Task list (unordered `- [x]` or ordered `1. [x]`, plus unknown markers
+    // such as `[?]` — the raw marker character is preserved verbatim).
+    // Matched before the plain list patterns so a task row only emits one
+    // region type (avoids duplicate marker decorations).
+    const taskMatch = line.match(/^(\s*)(?:([-*+])|(\d+)([.)]))\s\[([^\]]?)\](\s?)/)
     if (taskMatch) {
-      const checkStart = lineStart + taskMatch[1].length
+      const indent = taskMatch[1].length
+      const ordered = Boolean(taskMatch[3])
+      const markerText = taskMatch[2] || `${taskMatch[3]}${taskMatch[4]}`
+      const markerFrom = lineStart + indent
+      const markerTo = markerFrom + markerText.length
+      const bracketIndex = indent + markerText.length + 1
+      const checkFrom = lineStart + bracketIndex
+      const checkCharOffset = checkFrom + 1
+      const checkTo = checkFrom + 2 // position of ']'
+      const checkEnd = checkTo + (taskMatch[6] ? 1 : 0) // swallow the trailing space
+      const rawMarker = taskMatch[5]
       regions.push({
         type: 'task-list',
         from: lineStart,
         to: lineEnd,
-        contentFrom: checkStart + 4,
+        contentFrom: checkEnd,
         contentTo: lineEnd,
         meta: {
-          checked: taskMatch[2].toLowerCase() === 'x',
-          checkFrom: checkStart,
-          checkTo: checkStart + 3
+          ordered,
+          indent,
+          listMarker: markerText,
+          markerFrom,
+          markerTo,
+          checked: rawMarker === 'x' || rawMarker === 'X' ? true : rawMarker === ' ' || rawMarker === '' ? false : null,
+          rawMarker,
+          checkFrom,
+          checkCharOffset,
+          checkTo,
+          checkEnd,
+          lineNumber: i + 1
         }
       })
+    } else {
+      // Unordered list
+      const ulMatch = line.match(/^(\s*)([-*+])(?:\s(.*))?$/)
+      if (ulMatch) {
+        const indent = ulMatch[1].length
+        const markerStart = lineStart + indent
+        regions.push({
+          type: 'list-bullet',
+          from: lineStart,
+          to: lineEnd,
+          contentFrom: markerStart + 2,
+          contentTo: lineEnd,
+          meta: { marker: ulMatch[2], markerFrom: markerStart, markerTo: markerStart + 1, indent }
+        })
+      }
+
+      // Ordered list
+      const olMatch = line.match(/^(\s*)(\d+)([.)])(?:\s(.*))?$/)
+      if (olMatch) {
+        const indent = olMatch[1].length
+        const markerStart = lineStart + indent
+        const markerEnd = markerStart + olMatch[2].length + 1
+        regions.push({
+          type: 'list-ordered',
+          from: lineStart,
+          to: lineEnd,
+          contentFrom: markerEnd + 1,
+          contentTo: lineEnd,
+          meta: { number: olMatch[2], markerFrom: markerStart, markerTo: markerEnd, indent }
+        })
+      }
     }
 
     // Inline patterns on this line
